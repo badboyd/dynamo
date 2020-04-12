@@ -8,7 +8,7 @@ import (
 )
 
 // New logger module
-// Define LOG_LEVEL by env var DEBUG, WARN, INFO, ERROR
+// Define log level by LOG_LEVEL env var DEBUG, WARN, INFO, ERROR
 func New(module string) *zap.SugaredLogger {
 	logLevel := os.Getenv("LOG_LEVEL")
 	upperModule := strings.ToUpper(module)

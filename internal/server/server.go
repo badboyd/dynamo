@@ -4,6 +4,8 @@ type (
 	Server struct{}
 )
 
+// H.264 High Profile and VP9 (profile 0)
+
 func New() *Server {
 	//TODO implement create new server
 	return &Server{}
