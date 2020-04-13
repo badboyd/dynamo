@@ -8,13 +8,15 @@ import (
 	"github.com/spf13/viper"
 )
 
-type Config struct {
-	Server serverConfig `mapstructure:"server_config"`
-}
+type (
+	Config struct {
+		Server serverConfig `mapstructure:"server_config"`
+	}
 
-type serverConfig struct {
-	HTTPPort int `mapstructure:"http_port"`
-}
+	serverConfig struct {
+		HTTPPort int `mapstructure:"http_port"`
+	}
+)
 
 func Default() *Config {
 	return &Config{}
