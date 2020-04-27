@@ -1,7 +1,26 @@
 package main
 
-import "fmt"
+import (
+	"flag"
+
+	"github.com/badboyd/dynamo/config"
+	"github.com/badboyd/dynamo/internal/server"
+)
+
+var (
+	configFile = flag.String("config", "config/default.yml", "Configuration file path")
+)
+
+func init() {
+	flag.Parse()
+}
 
 func main() {
-	fmt.Println("Impelement Server")
+	conf, err := config.Load(*configFile)
+	if err != nil {
+		panic("Cannot read configuration file")
+	}
+
+	server := server.New(conf)
+	server.Start()
 }

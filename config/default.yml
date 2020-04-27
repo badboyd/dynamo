@@ -1,1 +1,17 @@
+server:
+  http_port: 13000
 
+video:
+  max_size_mb: 32
+  allowed_types:
+    mp4: 1
+    mp4: 1
+    x-m4v: 1
+    x-matroska: 1
+    webm: 1
+    quicktime: 1
+    x-msvideo: 1
+    x-ms-wmv: 1
+    mpeg: 1
+    x-flv: 1
+    3gpp: 1

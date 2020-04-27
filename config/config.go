@@ -9,19 +9,30 @@ import (
 )
 
 type (
+	// Config configuration schema
 	Config struct {
-		Server serverConfig `mapstructure:"server_config"`
+		Server serverConfig `json:"server" mapstructure:"server"`
+		Video  videoConfig  `json:"video" mapstructure:"video"`
 	}
 
 	serverConfig struct {
-		HTTPPort int `mapstructure:"http_port"`
+		HTTPPort int `mapstructure:"http_port" json:"http_port"`
+	}
+
+	videoConfig struct {
+		MaxSize            int64           `json:"max_size"`
+		MaxSizeMB          int64           `mapstructure:"max_size_mb" json:"max_size_mb"`
+		AllowedTypes       map[string]bool `mapstructure:"allowed_types" json:"allowed_types"`
+		AllowedTypesString string          `json:"allowed_types_string"`
 	}
 )
 
+// Default returns Default configurations
 func Default() *Config {
 	return &Config{}
 }
 
+// Load configuration from path
 func Load(path string) (*Config, error) {
 	v := viper.New()
 	v.SetConfigFile(path)
@@ -39,6 +50,21 @@ func Load(path string) (*Config, error) {
 
 	if err := cfg.validate(); err != nil {
 		return nil, err
+	}
+
+	if cfg.Video.MaxSizeMB > 0 {
+		cfg.Video.MaxSize = cfg.Video.MaxSizeMB * 1024 * 1024
+	}
+
+	if cfg.Video.AllowedTypes != nil {
+		tmp := ""
+		for t := range cfg.Video.AllowedTypes {
+			if tmp != "" {
+				tmp += ","
+			}
+			tmp += t
+		}
+		cfg.Video.AllowedTypesString = tmp
 	}
 
 	return cfg, nil
