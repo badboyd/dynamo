@@ -1,6 +1,7 @@
 package config
 
 import (
+	"fmt"
 	"net/http"
 	"strings"
 
@@ -13,10 +14,22 @@ type (
 	Config struct {
 		Server serverConfig `json:"server" mapstructure:"server"`
 		Video  videoConfig  `json:"video" mapstructure:"video"`
+		GCS    gcsConfig    `json:"gcs" mapstructure:"gcs"`
+		S3     s3Config     `json:"s3" mapstructure:"s3"`
 	}
 
 	serverConfig struct {
 		HTTPPort int `mapstructure:"http_port" json:"http_port"`
+	}
+
+	gcsConfig struct {
+		Enable bool   `mapstructure:"enable" json:"enable"`
+		Bucket string `mapstructure:"bucket" json:"bucket"`
+	}
+
+	s3Config struct {
+		Enable bool   `mapstructure:"enable" json:"enable"`
+		Bucket string `mapstructure:"bucket" json:"bucket"`
 	}
 
 	videoConfig struct {
@@ -48,10 +61,6 @@ func Load(path string) (*Config, error) {
 		return nil, err
 	}
 
-	if err := cfg.validate(); err != nil {
-		return nil, err
-	}
-
 	if cfg.Video.MaxSizeMB > 0 {
 		cfg.Video.MaxSize = cfg.Video.MaxSizeMB * 1024 * 1024
 	}
@@ -67,10 +76,30 @@ func Load(path string) (*Config, error) {
 		cfg.Video.AllowedTypesString = tmp
 	}
 
+	if err := cfg.validate(); err != nil {
+		return nil, err
+	}
+
 	return cfg, nil
 }
 
 func (c *Config) validate() error {
+	if c.Server.HTTPPort == 0 {
+		return fmt.Errorf("HTTP port cannot be empty")
+	}
+
+	if c.GCS.Enable && c.S3.Enable {
+		return fmt.Errorf("Cannot enable both storages")
+	}
+
+	if c.GCS.Enable && c.GCS.Bucket == "" {
+		return fmt.Errorf("GCS bucket cannot be empty")
+	}
+
+	if c.S3.Enable && c.S3.Bucket == "" {
+		return fmt.Errorf("S3 bucket cannot be empty")
+	}
+
 	return nil
 }
 

@@ -2,93 +2,68 @@ package gcs
 
 import (
 	"context"
-	"hash/crc32"
-	"io/ioutil"
-	"log"
-	"net/http"
-	"strings"
+	"io"
 
 	"cloud.google.com/go/storage"
 )
 
-// Transport stands for google cloud storage transport
-type Transport struct {
-	client *storage.Client
+// GCS stands for google cloud storage
+type GCS struct {
+	client     *storage.Client
+	bucketName string
 }
 
-// NewTransport returns new GCSTransport
-func NewTransport() http.RoundTripper {
+// New returns new GCS
+func New(bucketName string) (*GCS, error) {
 	client, err := storage.NewClient(context.Background())
 
 	if err != nil {
-		log.Fatalf("Can't create GCS client: %s", err.Error())
-	}
-
-	return Transport{client}
-}
-
-// RoundTrip for GCS transport
-func (t Transport) RoundTrip(req *http.Request) (resp *http.Response, err error) {
-	switch req.Method {
-	case http.MethodPut:
-		return t.Write(req)
-	case http.MethodDelete:
-		return t.Delete(req)
-	default:
-		// should never happens
 		return nil, err
 	}
+
+	return &GCS{
+		client:     client,
+		bucketName: bucketName,
+	}, nil
 }
 
 // Write object to GCS
-func (t Transport) Write(req *http.Request) (resp *http.Response, err error) {
-	bkt := t.client.Bucket(req.URL.Host)
-	obj := bkt.Object(strings.TrimPrefix(req.URL.Path, "/"))
+func (g *GCS) Write(ctx context.Context, r io.Reader, objName string, public bool) error {
+	bkt := g.client.Bucket(g.bucketName)
+	obj := bkt.Object(objName)
 
-	data, _ := ioutil.ReadAll(req.Body)
-	defer req.Body.Close()
+	ow := obj.NewWriter(ctx)
 
-	ow := obj.NewWriter(context.Background())
-
-	ow.CRC32C = crc32.Checksum(data, crc32.MakeTable(crc32.Castagnoli))
-	ow.SendCRC32C = true
-
-	if _, err = ow.Write(data); err != nil {
-		return nil, err
+	if _, err := io.Copy(ow, r); err != nil {
+		return err
 	}
 
 	if err := ow.Close(); err != nil {
-		return nil, err
+		return err
 	}
 
-	return &http.Response{
-		Status:     "200 OK",
-		StatusCode: 200,
-		Proto:      "HTTP/1.0",
-		ProtoMajor: 1,
-		ProtoMinor: 0,
-		Header:     make(http.Header),
-		Close:      true,
-		Request:    req,
-	}, nil
+	if public {
+		if err := obj.ACL().Set(ctx, storage.AllUsers, storage.RoleReader); err != nil {
+			return err
+		}
+	}
+
+	return nil
 }
 
 // Delete object from GCS
-func (t Transport) Delete(req *http.Request) (resp *http.Response, err error) {
-	bkt := t.client.Bucket(req.URL.Host)
-	obj := bkt.Object(strings.TrimPrefix(req.URL.Path, "/"))
-	if err := obj.Delete(context.Background()); err != nil {
-		return nil, err
+func (g *GCS) Delete(ctx context.Context, objName string) error {
+	if ctx == nil {
+		ctx = context.Background()
 	}
 
-	return &http.Response{
-		Status:     "200 OK",
-		StatusCode: 200,
-		Proto:      "HTTP/1.0",
-		ProtoMajor: 1,
-		ProtoMinor: 0,
-		Header:     make(http.Header),
-		Close:      true,
-		Request:    req,
-	}, nil
+	bkt := g.client.Bucket(g.bucketName)
+	obj := bkt.Object(objName)
+
+	return obj.Delete(ctx)
+}
+
+// Close storage
+func (g *GCS) Close() error {
+	return g.client.Close()
 }

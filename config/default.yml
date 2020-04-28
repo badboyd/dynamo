@@ -15,3 +15,15 @@ video:
     mpeg: 1
     x-flv: 1
     3gpp: 1
+
+storage:
+  salt:
+  secret: 
+
+gcs:
+  enable: 1
+  bucket: raw-img-staging
+
+s3:
+  enable: 0
+  bucket: raw-img-staging

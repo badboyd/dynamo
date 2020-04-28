@@ -11,11 +11,15 @@ import (
 
 	"github.com/labstack/echo/v4"
 	"github.com/labstack/echo/v4/middleware"
+	"github.com/labstack/gommon/random"
 
 	"github.com/labstack/echo-contrib/prometheus"
 
 	"github.com/badboyd/dynamo/config"
 	"github.com/badboyd/dynamo/pkg/logger"
+	"github.com/badboyd/dynamo/pkg/storage"
+	"github.com/badboyd/dynamo/pkg/storage/gcs"
+	"github.com/badboyd/dynamo/pkg/storage/s3"
 )
 
 const (
@@ -26,14 +30,17 @@ const (
 type (
 	// Server struct
 	Server struct {
-		e      *echo.Echo
-		cfg    *config.Config
-		logger *zap.SugaredLogger
+		e       *echo.Echo
+		cfg     *config.Config
+		logger  *zap.SugaredLogger
+		storage storage.Storage
 	}
 
 	uploadReq struct {
 		FileType string `json:"file_type"`
 		FileZize int64  `json:"filze_size"`
+		FileName string `json:"file_name"`
+		FileURL  string `json:"file_url"`
 	}
 )
 
@@ -46,13 +53,28 @@ func New(cfg *config.Config) *Server {
 		StackSize: 1 << 10, // 1 KB
 	}))
 
-	p := prometheus.NewPrometheus("echo", nil)
+	p := prometheus.NewPrometheus("dynamo", nil)
 	p.Use(e)
 
 	srv := &Server{
 		e:      e,
 		cfg:    cfg,
 		logger: logger.New("server"),
+	}
+
+	var err error
+	if cfg.GCS.Enable {
+		srv.storage, err = gcs.New(cfg.GCS.Bucket)
+	}
+	if err != nil {
+		panic(err)
+	}
+
+	if srv.storage == nil && cfg.S3.Enable {
+		srv.storage, err = s3.New(cfg.S3.Bucket)
+	}
+	if err != nil {
+		panic(err)
 	}
 
 	e.GET("/meta/config", cfg.ServeHTTP)
@@ -76,6 +98,10 @@ func (s *Server) Stop() {
 	if err := s.e.Shutdown(ctx); err != nil {
 		s.logger.Fatal(err)
 	}
+
+	if err := s.storage.Close(); err != nil {
+		s.logger.Fatal(err)
+	}
 }
 
 func (s *Server) checkHealth(ctx echo.Context) error {
@@ -88,13 +114,26 @@ func (s *Server) upload(ctx echo.Context) error {
 		return ctx.JSON(http.StatusInternalServerError, err)
 	}
 
+	fileName := fmt.Sprintf("raw/%s", random.New().String(10))
 	upReq := uploadReq{
 		FileType: fh.Header.Get("Content-Type"),
 		FileZize: fh.Size,
+		FileName: fileName,
+		FileURL:  fmt.Sprintf("https://cdn.chotot.org/%s", fileName),
 	}
 
 	if err := s.validateReq(ctx, upReq); err != nil {
 		return err
+	}
+
+	f, err := fh.Open()
+	if err != nil {
+		return echo.NewHTTPError(http.StatusInternalServerError, err.Error())
+	}
+	defer f.Close()
+
+	if err := s.storage.Write(context.Background(), f, fileName, true); err != nil {
+		return echo.NewHTTPError(http.StatusInternalServerError, err.Error())
 	}
 
 	return ctx.JSON(http.StatusOK, upReq)

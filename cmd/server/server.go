@@ -18,7 +18,7 @@ func init() {
 func main() {
 	conf, err := config.Load(*configFile)
 	if err != nil {
-		panic("Cannot read configuration file")
+		panic(err)
 	}
 
 	server := server.New(conf)
